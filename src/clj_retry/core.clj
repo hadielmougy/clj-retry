@@ -47,7 +47,7 @@
   Object
   (failed? [result] false)
   nil
-  (failed? [result] true))
+  (failed? [result] false))
 
 
 
@@ -79,7 +79,7 @@
     (if (failed? r)
       (do
         (*handler* r)
-        (will-conj acc r))
+        (will-conj [] r))
       (reduced r))))
 
 
