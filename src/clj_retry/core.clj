@@ -11,8 +11,12 @@
 
 (def ^:private default {:handler (constantly nil)
                         :types []
-                        :max-retries 0
+                        :max-retries 1
                         :delay 0})
+
+
+(def ^:dynamic *handler* nil)
+(def ^:dynamic *delay* 1)
 
 
 
@@ -62,11 +66,11 @@
 (defmacro try* [body]
   `(try
       ~body
-    (catch Exception e# nil)))
+    (catch Exception e# e#)))
 
 
 (defn- will-conj [coll elm]
-  (Thread/sleep 1000)
+  (Thread/sleep *delay*)
   (conj coll elm))
 
 
@@ -74,6 +78,7 @@
   (let [r (try* (g))]
     (if (failed? r)
       (do
+        (*handler* r)
         (will-conj acc r))
       (reduced r))))
 
@@ -84,7 +89,10 @@
 
 
 (defmacro safe [command plan]
-  `(let [fns# (repeatedly
-                (:max-retries (plan ~plan))
+  `(let [p# (plan ~plan)
+         fns# (repeatedly
+                (:max-retries p#)
                 (fn [] ~command))]
-     (execute-repeatedly fns#)))
+     (binding [*delay* (:delay p#)
+               *handler* (:handler p#)]
+       (execute-repeatedly fns#))))
