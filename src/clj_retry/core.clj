@@ -1,28 +1,28 @@
 (ns clj-retry.core
   (:require [clojure.spec.alpha :as s]))
 
-(s/def ::type (s/or :val keyword? :val string?))
-(s/def ::types (s/coll-of ::type))
 (s/def ::handler fn?)
-(s/def ::max-retries pos-int?)
+(s/def ::max-retries nat-int?)
 (s/def ::delay nat-int?)
-(s/def ::plan (s/keys :req-un [::handler ::types]
+(s/def ::plan (s/keys :req-un [::handler]
                       :opt-un [::max-retries ::delay]))
 
 (def ^:private default {:handler (constantly nil)
-                        :types []
                         :max-retries 1
                         :delay 0})
 
 
 (def ^:dynamic *handler* nil)
 (def ^:dynamic *delay* 1)
+(def ^:dynamic *max-retries* 1)
+(def ^:dynamic *retries* 0)
 
 
 
 (s/valid? ::plan default)
 
 (defrecord Plan [handler types max-retries delay])
+
 
 (defprotocol IPlan
   (plan [spec]))
@@ -51,12 +51,12 @@
 
 
 
-(defn with-plan [& {:keys [handler types max-retries delay]
-                    :or   {max-retries 1 delay 0} :as args}]
+
+(defn with-plan [& {:keys [handler max-retries delay]
+                    :or   {max-retries 0 delay 0} :as args}]
   {:pre [(s/valid? ::plan args)]
    :post [#(instance? Plan %)]}
   (plan args))
-
 
 (defn silently []
   (plan nil))
@@ -69,30 +69,35 @@
     (catch Exception e# e#)))
 
 
-(defn- will-conj [coll elm]
+(defn- will-conj [coll v]
   (Thread/sleep *delay*)
-  (conj coll elm))
+  (conj coll v))
 
 
 (defn- execute [acc g]
   (let [r (try* (g))]
-    (if (failed? r)
-      (do
-        (*handler* r)
-        (will-conj [] r))
+    (if (and (not= *retries* *max-retries*) (failed? r))
+      (binding [*retries* (inc *retries*)]
+        (try* (*handler* r))
+        (will-conj (conj) r))
       (reduced r))))
 
 
 (defn- execute-repeatedly [fns]
-  (reduce execute [] fns))
+  (let [val (reduce execute (conj) fns)]
+    (if (coll? val)
+      (first val)
+      val)))
 
 
 
 (defmacro safe [command plan]
-  `(let [p# (plan ~plan)
-         fns# (repeatedly
-                (:max-retries p#)
-                (fn [] ~command))]
+  `(let [p# (plan ~plan)]
      (binding [*delay* (:delay p#)
-               *handler* (:handler p#)]
-       (execute-repeatedly fns#))))
+               *handler* (:handler p#)
+               *max-retries* (:max-retries p#)
+               *retries* (+)]
+       (execute-repeatedly
+         (repeatedly
+           (inc *max-retries*)
+           (fn [] ~command))))))
