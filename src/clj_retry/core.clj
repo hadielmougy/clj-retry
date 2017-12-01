@@ -21,24 +21,11 @@
 
 (s/valid? ::plan default)
 
-(defrecord Plan [handler max-retries delay])
-
-
-(defprotocol IPlan
-  (plan [spec]))
 
 (defprotocol IHandler
   (failed? [ex])
   (info [ex]))
 
-
-(extend-protocol IPlan
-  Plan
-  (plan [spec] spec)
-  clojure.lang.PersistentHashMap
-  (plan [spec] (map->Plan spec))
-  nil
-  (plan [spec] (plan default)))
 
 
 
@@ -51,23 +38,10 @@
   (info [ex] (.getMessage ex))
   Object
   (failed? [_] false)
-  (info [ex] nil)
+  (info [_] nil)
   nil
   (failed? [_] false)
-  (info [ex] nil))
-
-
-
-
-(defn with-plan [& {:keys [handler max-retries delay]
-                    :or   {max-retries 0 delay 0} :as args}]
-  {:pre [(s/valid? ::plan args)]
-   :post [#(instance? Plan %)]}
-  (plan args))
-
-(defn silently []
-  (plan nil))
-
+  (info [_] nil))
 
 
 (defmacro try* [body]
@@ -99,13 +73,13 @@
 
 
 
-(defmacro safe [command plan]
-  `(let [p# (plan ~plan)]
-     (binding [*delay* (:delay p#)
-               *handler* (:handler p#)
-               *max-retries* (:max-retries p#)
-               *retries* (+)]
-       (execute-repeatedly
-         (repeatedly
-           (inc *max-retries*)
-           (fn [] ~command))))))
+(defmacro do* [command {:keys [handler max-retries delay]
+                         :or   {max-retries 0 delay 0} :as plan}]
+  `(binding [*delay* ~delay
+             *handler* ~handler
+             *max-retries* ~max-retries
+             *retries* (+)]
+     (execute-repeatedly
+       (repeatedly
+         (inc *max-retries*)
+         (fn [] ~command)))))
