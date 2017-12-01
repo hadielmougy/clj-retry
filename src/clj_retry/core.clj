@@ -28,7 +28,8 @@
   (plan [spec]))
 
 (defprotocol IHandler
-  (failed? [result]))
+  (failed? [ex])
+  (info [ex]))
 
 
 (extend-protocol IPlan
@@ -43,11 +44,17 @@
 
 (extend-protocol IHandler
   clojure.lang.ExceptionInfo
-  (failed? [result] true)
+  (failed? [ex] true)
+  (info [ex] (ex-data ex))
+  Exception
+  (failed? [ex] true)
+  (info [ex] (.getMessage ex))
   Object
-  (failed? [result] false)
+  (failed? [_] false)
+  (info [ex] nil)
   nil
-  (failed? [result] false))
+  (failed? [_] false)
+  (info [ex] nil))
 
 
 
@@ -79,7 +86,7 @@
     (if (and (not= *retries* *max-retries*) (failed? r))
       (do
         (set! *retries* (inc *retries*))
-        (try* (*handler* r))
+        (try* (*handler* (info r)))
         (will-conj (conj) r))
       (reduced r))))
 
