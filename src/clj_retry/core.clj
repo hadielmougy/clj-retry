@@ -21,7 +21,7 @@
 
 (s/valid? ::plan default)
 
-(defrecord Plan [handler types max-retries delay])
+(defrecord Plan [handler max-retries delay])
 
 
 (defprotocol IPlan
@@ -77,7 +77,8 @@
 (defn- execute [acc g]
   (let [r (try* (g))]
     (if (and (not= *retries* *max-retries*) (failed? r))
-      (binding [*retries* (inc *retries*)]
+      (do
+        (set! *retries* (inc *retries*))
         (try* (*handler* r))
         (will-conj (conj) r))
       (reduced r))))
