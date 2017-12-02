@@ -7,9 +7,7 @@
 (s/def ::plan (s/keys :req-un [::handler]
                       :opt-un [::max-retries ::delay]))
 
-(def ^:private default {:handler (constantly nil)
-                        :max-retries 1
-                        :delay 0})
+
 
 
 (def ^:dynamic *handler* nil)
@@ -19,15 +17,12 @@
 
 
 
-(s/valid? ::plan default)
+
 
 
 (defprotocol IHandler
   (failed? [ex])
   (info [ex]))
-
-
-
 
 (extend-protocol IHandler
   clojure.lang.ExceptionInfo
